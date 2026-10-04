@@ -1,0 +1,129 @@
+{
+  "suite": "bug-bounty-agent-tools",
+  "version": "1.2.0",
+  "note": "Target-agnostic. Backend bindings: GitHub Copilot chat completions (ai.py), SerpAPI, GitHub REST API, local corpus files in tools/data/, and the tested poc_store shell script. Per-target intelligence is supplied at runtime by dropping files into tools/data/target/ (e.g. an exported GraphQL schema, site pages, API docs).",
+  "data_files": {
+    "payload_corpus": "tools/data/reports.md",
+    "target_intel_dir": "tools/data/target/"
+  },
+  "tools": [
+    {
+      "name": "payload_library.search",
+      "description": "Keyword-scored search over the local payload corpus (reports.md) of real, previously-successful vulnerability reports. Query by weakness type (XSS, SQLi, SSRF, CSRF, IDOR, SSTI, RCE, CRLF, CORS, DoS) or by payload behavior.",
+      "parameters": {
+        "query": { "type": "string", "required": true },
+        "top_k": { "type": "integer", "default": 5 }
+      },
+      "backend": { "type": "local", "handler": "tool_payload_library_search", "file": "tools/data/reports.md" }
+    },
+    {
+      "name": "payload_library.grep",
+      "description": "Exact case-insensitive substring match inside the payload corpus with surrounding context.",
+      "parameters": {
+        "pattern": { "type": "string", "required": true },
+        "top_k": { "type": "integer", "default": 10 }
+      },
+      "backend": { "type": "local", "handler": "tool_payload_library_grep", "file": "tools/data/reports.md" }
+    },
+    {
+      "name": "payload_library.read",
+      "description": "Read corpus content at a position. uri format: local://<filename>?at=POSITION",
+      "parameters": { "uri": { "type": "string", "required": true } },
+      "backend": { "type": "local", "handler": "tool_payload_library_read" }
+    },
+    {
+      "name": "target_intel.search",
+      "description": "Keyword-scored search over per-target intelligence files the operator places in tools/data/target/ (exported GraphQL schemas, API docs, site pages, config exports). This is how a target's attack surface is mapped before testing.",
+      "parameters": {
+        "query": { "type": "string", "required": true },
+        "top_k": { "type": "integer", "default": 5 }
+      },
+      "backend": { "type": "local", "handler": "tool_target_intel_search", "dir": "tools/data/target/" }
+    },
+    {
+      "name": "repo_intel.get_file",
+      "description": "Retrieve file contents from the target GitHub repository. Priority: README, .gitignore, dependency manifests, Dockerfile, .env.example, entry points, routes, auth middleware, validation code.",
+      "parameters": {
+        "owner": { "type": "string", "required": true },
+        "repo": { "type": "string", "required": true },
+        "path": { "type": "string", "required": true },
+        "branch": { "type": "string", "required": false }
+      },
+      "backend": { "type": "http", "handler": "tool_repo_intel_get_file", "endpoint": "https://api.github.com/repos/{owner}/{repo}/contents/{path}" }
+    },
+    {
+      "name": "repo_intel.search_code",
+      "description": "Search code for vulnerability patterns: eval(, exec(, system(, spawn, SQL statements, fs operations, deserialization, template engines, hardcoded secrets.",
+      "parameters": {
+        "query": { "type": "string", "required": true }
+      },
+      "backend": { "type": "http", "handler": "tool_repo_intel_search_code", "endpoint": "https://api.github.com/search/code" }
+    },
+    {
+      "name": "repo_intel.list_commits",
+      "description": "List recent repository commits to understand activity and security-relevant changes.",
+      "parameters": {
+        "owner": { "type": "string", "required": true },
+        "repo": { "type": "string", "required": true }
+      },
+      "backend": { "type": "http", "handler": "tool_repo_intel_list_commits", "endpoint": "https://api.github.com/repos/{owner}/{repo}/commits" }
+    },
+    {
+      "name": "research.web_search",
+      "description": "SerpAPI Google search for CVEs, public bug bounty reports, and exploit PoCs. Operators supported: site:, intitle:, inurl:, filetype:, quoted phrases, OR. start_date/end_date appended as after:/before:.",
+      "parameters": {
+        "query": { "type": "string", "required": true },
+        "start_date": { "type": "string", "required": false },
+        "end_date": { "type": "string", "required": false },
+        "limit": { "type": "integer", "default": 10 }
+      },
+      "backend": { "type": "http", "handler": "tool_research_web_search", "endpoint": "https://serpapi.com/search.json", "auth": "SERPAPI" }
+    },
+    {
+      "name": "research.open_url",
+      "description": "Retrieve full content of a URL from a research result, with HTML tags stripped for context efficiency.",
+      "parameters": { "url": { "type": "string", "required": true } },
+      "backend": { "type": "http", "handler": "tool_research_open_url" }
+    },
+    {
+      "name": "research.news_search",
+      "description": "SerpAPI Google News search for recent security advisories and disclosures with explicit date ranges.",
+      "parameters": {
+        "query": { "type": "string", "required": true },
+        "start_date": { "type": "string", "required": false },
+        "end_date": { "type": "string", "required": false }
+      },
+      "backend": { "type": "http", "handler": "tool_research_news_search", "endpoint": "https://serpapi.com/search.json", "auth": "SERPAPI" }
+    },
+    {
+      "name": "http.request",
+      "description": "Execute a PoC HTTP request against an in-scope target with full request/response capture: status, headers, body, timing, and a request echo for the POC record. Redirects are not followed.",
+      "parameters": {
+        "url": { "type": "string", "required": true },
+        "method": { "type": "string", "default": "GET", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] },
+        "headers": { "type": "object", "default": {} },
+        "body": { "type": "string", "required": false },
+        "timeout_ms": { "type": "integer", "default": 15000 }
+      },
+      "backend": { "type": "http", "handler": "tool_http_request" }
+    },
+    {
+      "name": "poc_store.save",
+      "description": "Persist a verified, successful PoC. Validates mandatory sections and confirmed status; rejects incomplete, unconfirmed, or duplicate records.",
+      "parameters": { "poc_markdown": { "type": "string", "required": true } },
+      "backend": { "type": "script", "handler": "tool_poc_store_save", "script": "tools/poc_store/save_poc.sh" }
+    },
+    {
+      "name": "poc_store.discard",
+      "description": "Discard a failed attempt. Only a one-line timestamped reason is logged to pocs/_failures.log.",
+      "parameters": { "reason": { "type": "string", "required": true } },
+      "backend": { "type": "script", "handler": "tool_poc_store_discard", "script": "tools/poc_store/save_poc.sh" }
+    },
+    {
+      "name": "poc_store.list",
+      "description": "List stored POCs with type and severity for deduplication and chaining analysis.",
+      "parameters": {},
+      "backend": { "type": "script", "handler": "tool_poc_store_list", "script": "tools/poc_store/save_poc.sh" }
+    }
+  ]
+}
