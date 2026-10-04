@@ -35,8 +35,8 @@ PROMPT_PATH = ROOT / "prompts" / "system-prompt.md"
 SKILLS_DIR = ROOT / "skills"
 POC_SCRIPT = ROOT / "tools" / "poc_store" / "save_poc.sh"
 
-MAX_TURNS = 24
-MAX_TOOL_RESULT_CHARS = 6000
+MAX_TURNS = 50
+MAX_TOOL_RESULT_CHARS = 25000
 
 # --------------------------------------------------------------------------
 # Configuration
